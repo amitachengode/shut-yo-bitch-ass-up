@@ -1,0 +1,15 @@
+[project]
+name = "clickchaos"
+version = "0.1.0"
+description = "ClickChaos - Randomize and swap mouse button functionalities system-wide"
+requires-python = ">=3.10"
+dependencies = [
+    "pillow>=10.0.0",
+    "pystray>=0.19.5",
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
