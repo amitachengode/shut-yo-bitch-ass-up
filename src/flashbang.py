@@ -48,8 +48,8 @@ class FlashbangManager:
 
     def __init__(
         self,
-        min_interval: float = 1.0,
-        max_interval: float = 30.0,
+        min_interval: float = 60.0,
+        max_interval: float = 120.0,
         fade_duration: float = 3.0,
         sound_enabled: bool = True,
         audio_path: Optional[str | Path] = None,

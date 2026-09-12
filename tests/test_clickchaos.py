@@ -379,6 +379,66 @@ class TestMouseHookManagerStructures:
         res = mgr.teleport_cursor()
         assert res == locked_pos
 
+    def test_fifth_click_triggers_lock_and_intended_click(self):
+        """On the 5th click, the cursor locks and executes the intended natural click."""
+        randomizer = ButtonRandomizer()
+        # Set mapping so LEFT maps to RIGHT
+        randomizer._mapping = {
+            ButtonType.LEFT: ButtonType.RIGHT,
+            ButtonType.RIGHT: ButtonType.LEFT,
+            ButtonType.MIDDLE: ButtonType.MIDDLE,
+            ButtonType.XBUTTON1: ButtonType.XBUTTON1,
+            ButtonType.XBUTTON2: ButtonType.XBUTTON2,
+        }
+        mgr = MouseHookManager(randomizer=randomizer)
+        mgr.set_active(True)
+
+        hook_data = MSLLHOOKSTRUCT()
+        hook_data.flags = 0
+        hook_data.dwExtraInfo = 0
+        p_hook_data = ctypes.cast(ctypes.pointer(hook_data), ctypes.c_void_p).value
+
+        # First 4 clicks: mapped to target_button (RIGHT)
+        for _ in range(4):
+            mgr._low_level_mouse_proc(0, WM_LBUTTONDOWN, p_hook_data)
+            mgr._low_level_mouse_proc(0, WM_LBUTTONUP, p_hook_data)
+
+        assert mgr._click_count == 4
+        assert not mgr.is_cursor_locked
+
+        # Clear queue from first 4 clicks
+        while not mgr._injection_queue.empty():
+            mgr._injection_queue.get_nowait()
+
+        # 5th click: cursor locks, physical click is deferred as pending
+        stuck_called = False
+        def on_stuck():
+            nonlocal stuck_called
+            stuck_called = True
+
+        mgr.set_on_stuck_callback(on_stuck)
+        res = mgr._low_level_mouse_proc(0, WM_LBUTTONDOWN, p_hook_data)
+        assert res == 1
+        assert mgr.is_cursor_locked
+        assert mgr._click_count == 5
+        assert mgr._pending_unlock_click == ButtonType.LEFT
+
+        # While cursor is locked, nothing is injected yet
+        assert mgr._injection_queue.empty()
+
+        # When unlock_cursor is called (after user enters correct letter)
+        mgr.unlock_cursor()
+        assert not mgr.is_cursor_locked
+        assert mgr._pending_unlock_click is None
+
+        # Verify the deferred natural button (LEFT, True) and (LEFT, False) are queued
+        queued_items = []
+        while not mgr._injection_queue.empty():
+            queued_items.append(mgr._injection_queue.get_nowait())
+
+        assert (ButtonType.LEFT, True) in queued_items
+        assert (ButtonType.LEFT, False) in queued_items
+
 
 class TestTrayUIAssets:
     def test_generate_tray_image(self):

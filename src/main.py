@@ -94,14 +94,14 @@ def main() -> None:
     parser.add_argument(
         "--flash-min",
         type=float,
-        default=1.0,
-        help="Minimum seconds between random flashbangs (default: 1.0s).",
+        default=60.0,
+        help="Minimum seconds between random flashbangs (default: 60.0s / 1 min).",
     )
     parser.add_argument(
         "--flash-max",
         type=float,
-        default=30.0,
-        help="Maximum seconds between random flashbangs (default: 30.0s).",
+        default=120.0,
+        help="Maximum seconds between random flashbangs (default: 120.0s / 2 mins).",
     )
     parser.add_argument(
         "--no-hotkeys",
@@ -291,8 +291,8 @@ def main() -> None:
             show_stuck_popup(letter)
 
             def unlock_and_dismiss():
-                hook_manager.unlock_cursor()
                 dismiss_stuck_popup()
+                hook_manager.unlock_cursor()
                 tray.update_ui()
 
             hotkey_manager.register_unlock_key(letter, unlock_and_dismiss)

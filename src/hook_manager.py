@@ -243,6 +243,7 @@ class MouseHookManager:
 
         self._click_count = 0
         self._locked_pos: Optional[tuple[int, int]] = None
+        self._pending_unlock_click: Optional[ButtonType] = None
         self._on_stuck_callback: Optional[Callable[[], None]] = None
 
     def set_on_stuck_callback(self, callback: Callable[[], None]) -> None:
@@ -333,13 +334,25 @@ class MouseHookManager:
             return True
 
     def unlock_cursor(self) -> bool:
-        """Release any active cursor lock, restoring free movement."""
+        """Release any active cursor lock, restoring free movement and executing pending click."""
         with self._lock:
+            locked_coord = self._locked_pos
             self._locked_pos = None
             user32.ClipCursor(None)
             self._is_cursor_locked = False
+            pending = self._pending_unlock_click
+            self._pending_unlock_click = None
             logger.info("Cursor unlocked.")
-            return True
+
+        if pending and locked_coord:
+            btn = pending
+            lx, ly = locked_coord
+            user32.SetCursorPos(lx, ly)
+            logger.info("Executing pending intended click (%s) at (%d, %d)", btn, lx, ly)
+            self._injection_queue.put((btn, True))
+            self._injection_queue.put((btn, False))
+
+        return True
 
     def toggle_cursor_lock(self) -> bool:
         """Toggle cursor locking state."""
@@ -540,24 +553,24 @@ class MouseHookManager:
             # Map button and track state
             with self._lock:
                 if is_down:
-                    target_button = self.randomizer.map_button(phys_button)
-                    self._active_presses[phys_button] = target_button
-
                     self._click_count += 1
                     if self._click_count % 5 == 0:
                         self.lock_cursor()
+                        self._pending_unlock_click = phys_button
                         if self._on_stuck_callback:
                             # Call asynchronously to not block the low level hook thread
                             threading.Thread(target=self._on_stuck_callback, daemon=True).start()
-                        # Do not teleport or inject synthetic click when cursor is now locked
                         return 1
+
+                    target_button = self.randomizer.map_button(phys_button)
+                    self._active_presses[phys_button] = target_button
 
                     # If teleportation is enabled, teleport cursor on non-locking click down
                     if self._is_teleport_enabled:
                         self._injection_queue.put(("TELEPORT", 0, 0))
                 else:
                     target_button = self._active_presses.pop(
-                        phys_button, self.randomizer.map_button(phys_button)
+                        phys_button, phys_button if self._is_cursor_locked else self.randomizer.map_button(phys_button)
                     )
 
             self._injection_queue.put((target_button, is_down))
