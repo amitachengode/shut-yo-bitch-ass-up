@@ -100,8 +100,8 @@ def main() -> None:
     parser.add_argument(
         "--flash-max",
         type=float,
-        default=10.0,
-        help="Maximum seconds between random flashbangs (default: 10.0s).",
+        default=30.0,
+        help="Maximum seconds between random flashbangs (default: 30.0s).",
     )
     parser.add_argument(
         "--no-hotkeys",
@@ -227,6 +227,8 @@ def main() -> None:
         logger.info("Shutting down ClickChaos cleanly...")
         if hotkey_manager:
             hotkey_manager.stop()
+        from src.popup import dismiss_stuck_popup
+        dismiss_stuck_popup()
         flashbang_manager.stop_scheduler()
         hook_manager.stop()
         randomizer.stop_auto_shuffle()
@@ -279,12 +281,21 @@ def main() -> None:
         
         import string
         import random
+        from src.popup import show_stuck_popup, dismiss_stuck_popup
+
         def on_stuck():
             letter = random.choice(string.ascii_uppercase)
             print(f"\n==============================================", flush=True)
             print(f"   CURSOR STUCK! Press '{letter}' to unlock!  ", flush=True)
             print(f"==============================================\n", flush=True)
-            hotkey_manager.register_unlock_key(letter, lambda: hook_manager.unlock_cursor())
+            show_stuck_popup(letter)
+
+            def unlock_and_dismiss():
+                hook_manager.unlock_cursor()
+                dismiss_stuck_popup()
+                tray.update_ui()
+
+            hotkey_manager.register_unlock_key(letter, unlock_and_dismiss)
             
         hook_manager.set_on_stuck_callback(on_stuck)
 

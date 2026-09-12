@@ -22,7 +22,7 @@ class TestFlashbangSuite:
         """Test default values and initialization."""
         fm = FlashbangManager()
         assert fm.min_interval == 1.0
-        assert fm.max_interval == 10.0
+        assert fm.max_interval == 30.0
         assert fm.fade_duration == 3.0
         assert fm.sound_enabled is True
         assert fm.enabled is True

@@ -49,7 +49,7 @@ class FlashbangManager:
     def __init__(
         self,
         min_interval: float = 1.0,
-        max_interval: float = 10.0,
+        max_interval: float = 30.0,
         fade_duration: float = 3.0,
         sound_enabled: bool = True,
         audio_path: Optional[str | Path] = None,
@@ -252,42 +252,43 @@ class FlashbangManager:
             user32.UnregisterClassW(class_name, h_instance)
             return
 
-        # Play audio ringing asynchronously
-        threading.Thread(target=self._play_sound, daemon=True).start()
+        try:
+            # Play audio ringing asynchronously
+            threading.Thread(target=self._play_sound, daemon=True).start()
 
-        # Display immediately at 100% maximum brightness
-        user32.SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA)
-        user32.ShowWindow(hwnd, SW_SHOW)
+            # Display immediately at 100% maximum brightness
+            user32.SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA)
+            user32.ShowWindow(hwnd, SW_SHOW)
 
-        # Hold peak brightness briefly, then dim smoothly
-        hold_time = min(0.35, duration * 0.2)
-        dim_time = max(0.05, duration - hold_time)
-        start_time = time.monotonic()
+            # Hold peak brightness briefly, then dim smoothly
+            hold_time = min(0.35, duration * 0.2)
+            dim_time = max(0.05, duration - hold_time)
+            start_time = time.monotonic()
 
-        msg = wintypes.MSG()
-        PM_REMOVE = 0x0001
+            msg = wintypes.MSG()
+            PM_REMOVE = 0x0001
 
-        while True:
-            while user32.PeekMessageW(ctypes.byref(msg), hwnd, 0, 0, PM_REMOVE):
-                user32.TranslateMessage(ctypes.byref(msg))
-                user32.DispatchMessageW(ctypes.byref(msg))
+            while True:
+                while user32.PeekMessageW(ctypes.byref(msg), hwnd, 0, 0, PM_REMOVE):
+                    user32.TranslateMessage(ctypes.byref(msg))
+                    user32.DispatchMessageW(ctypes.byref(msg))
 
-            now = time.monotonic()
-            elapsed = now - start_time
-            if elapsed < hold_time:
-                alpha = 255
-            else:
-                progress = (elapsed - hold_time) / dim_time
-                if progress >= 1.0:
-                    break
-                # Non-linear easing (dissipating smoke/flash)
-                alpha = int(255 * ((1.0 - progress) ** 1.8))
+                now = time.monotonic()
+                elapsed = now - start_time
+                if elapsed < hold_time:
+                    alpha = 255
+                else:
+                    progress = (elapsed - hold_time) / dim_time
+                    if progress >= 1.0:
+                        break
+                    # Non-linear easing (dissipating smoke/flash)
+                    alpha = int(255 * ((1.0 - progress) ** 1.8))
 
-            user32.SetLayeredWindowAttributes(hwnd, 0, max(0, min(255, alpha)), LWA_ALPHA)
-            time.sleep(0.02)
-
-        user32.DestroyWindow(hwnd)
-        user32.UnregisterClassW(class_name, h_instance)
+                user32.SetLayeredWindowAttributes(hwnd, 0, max(0, min(255, alpha)), LWA_ALPHA)
+                time.sleep(0.02)
+        finally:
+            user32.DestroyWindow(hwnd)
+            user32.UnregisterClassW(class_name, h_instance)
 
     def _run_tk_flashbang(self, duration: float) -> None:
         """Fallback Tkinter fullscreen overlay for non-Windows systems."""

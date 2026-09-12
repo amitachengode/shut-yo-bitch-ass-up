@@ -22,6 +22,7 @@ from src.hook_manager import (
     WM_LBUTTONUP,
     WM_MBUTTONDOWN,
     WM_MBUTTONUP,
+    WM_MOUSEMOVE,
     WM_RBUTTONDOWN,
     WM_RBUTTONUP,
     WM_XBUTTONDOWN,
@@ -338,6 +339,45 @@ class TestMouseHookManagerStructures:
         assert CHAOS_EXTRA_INFO == 0xC11C4CA0
         assert LLMHF_INJECTED == 0x00000001
         assert LLMHF_LOWER_IL_INJECTED == 0x00000002
+
+    def test_cursor_lock_blocks_mouse_move_and_clicks(self):
+        """When cursor is locked, WM_MOUSEMOVE must return 1 (suppressed) and not pass to next hook."""
+        randomizer = ButtonRandomizer()
+        mgr = MouseHookManager(randomizer=randomizer)
+        mgr.set_active(True)
+
+        hook_data = MSLLHOOKSTRUCT()
+        hook_data.flags = 0
+        hook_data.dwExtraInfo = 0
+        p_hook_data = ctypes.cast(ctypes.pointer(hook_data), ctypes.c_void_p).value
+
+        # When NOT locked, mousemove should return CallNextHookEx (default 0 in test)
+        res_unlocked = mgr._low_level_mouse_proc(0, WM_MOUSEMOVE, p_hook_data)
+        assert res_unlocked == 0
+
+        # Lock cursor
+        mgr.lock_cursor()
+        assert mgr.is_cursor_locked
+
+        # When locked, mousemove MUST be intercepted and return 1 (suppressed)
+        res_locked = mgr._low_level_mouse_proc(0, WM_MOUSEMOVE, p_hook_data)
+        assert res_locked == 1
+
+        # Unlock cursor
+        mgr.unlock_cursor()
+        assert not mgr.is_cursor_locked
+        res_after = mgr._low_level_mouse_proc(0, WM_MOUSEMOVE, p_hook_data)
+        assert res_after == 0
+
+    def test_cursor_lock_teleport_suppression(self):
+        """teleport_cursor should not move mouse if cursor is locked."""
+        randomizer = ButtonRandomizer()
+        mgr = MouseHookManager(randomizer=randomizer)
+        mgr.lock_cursor()
+        locked_pos = mgr._locked_pos
+
+        res = mgr.teleport_cursor()
+        assert res == locked_pos
 
 
 class TestTrayUIAssets:

@@ -208,6 +208,12 @@ class TrayUI:
     def toggle_cursor_lock(self) -> bool:
         """Toggle cursor freezing and refresh UI."""
         new_state = self.hook_manager.toggle_cursor_lock()
+        if not new_state:
+            try:
+                from src.popup import dismiss_stuck_popup
+                dismiss_stuck_popup()
+            except Exception:
+                pass
         self.update_ui()
         logger.info("Cursor Lock toggled: %s", "LOCKED" if new_state else "UNLOCKED")
         return new_state
@@ -264,6 +270,11 @@ class TrayUI:
         self.hook_manager.set_active(False)
         self.hook_manager.unlock_cursor()
         self.hook_manager.set_teleport_enabled(False)
+        try:
+            from src.popup import dismiss_stuck_popup
+            dismiss_stuck_popup()
+        except Exception:
+            pass
         self.update_ui()
         logger.info("Emergency Disable: Chaos Mode is INACTIVE, cursor UNLOCKED, teleportation DISABLED.")
 

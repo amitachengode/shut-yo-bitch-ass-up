@@ -25,7 +25,7 @@ logger = logging.getLogger("ClickChaos.HookManager")
 WH_MOUSE_LL = 14
 WM_QUIT = 0x0012
 
-# Mouse Window Messages
+WM_MOUSEMOVE = 0x0200
 WM_LBUTTONDOWN = 0x0201
 WM_LBUTTONUP = 0x0202
 WM_RBUTTONDOWN = 0x0204
@@ -242,6 +242,7 @@ class MouseHookManager:
         self._active_presses: Dict[ButtonType, ButtonType] = {}
 
         self._click_count = 0
+        self._locked_pos: Optional[tuple[int, int]] = None
         self._on_stuck_callback: Optional[Callable[[], None]] = None
 
     def set_on_stuck_callback(self, callback: Callable[[], None]) -> None:
@@ -278,6 +279,12 @@ class MouseHookManager:
 
     def teleport_cursor(self) -> tuple[int, int]:
         """Teleport mouse cursor to a random screen coordinate across all monitors."""
+        with self._lock:
+            if self._is_cursor_locked:
+                if self._locked_pos:
+                    return self._locked_pos
+                return (0, 0)
+
         vx = user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
         vy = user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
         vw = user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
@@ -318,17 +325,17 @@ class MouseHookManager:
         with self._lock:
             pt = POINT(0, 0)
             user32.GetCursorPos(ctypes.byref(pt))
+            self._locked_pos = (pt.x, pt.y)
             rect = RECT(pt.x, pt.y, pt.x + 1, pt.y + 1)
             success = bool(user32.ClipCursor(ctypes.byref(rect)))
-            if success:
-                self._is_cursor_locked = True
-                logger.info("Cursor locked at (%d, %d)", pt.x, pt.y)
-                return True
-            return False
+            self._is_cursor_locked = True
+            logger.info("Cursor locked at (%d, %d) (ClipCursor=%s)", pt.x, pt.y, success)
+            return True
 
     def unlock_cursor(self) -> bool:
         """Release any active cursor lock, restoring free movement."""
         with self._lock:
+            self._locked_pos = None
             user32.ClipCursor(None)
             self._is_cursor_locked = False
             logger.info("Cursor unlocked.")
@@ -472,68 +479,92 @@ class MouseHookManager:
         if nCode < 0:
             return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
 
-        is_click = wParam in CLICK_MESSAGES
-        is_scroll = wParam in SCROLL_MESSAGES
+        try:
+            is_move = (wParam == WM_MOUSEMOVE)
+            is_click = wParam in CLICK_MESSAGES
+            is_scroll = wParam in SCROLL_MESSAGES
 
-        # Fast path: Non-click and non-scroll events pass through instantly
-        if not is_click and not is_scroll:
-            return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
-
-        hook_struct = ctypes.cast(lParam, PMSLLHOOKSTRUCT).contents
-
-        # Recursion check
-        is_injected = bool(hook_struct.flags & (LLMHF_INJECTED | LLMHF_LOWER_IL_INJECTED))
-        is_our_event = (hook_struct.dwExtraInfo == CHAOS_EXTRA_INFO)
-
-        if is_injected or is_our_event:
-            return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
-
-        # If Chaos Mode is not active, let everything pass through
-        if not self._is_active:
-            return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
-
-        # Handle Scroll Wheel Events
-        if is_scroll:
-            if not self._is_scroll_chaos_enabled:
+            # Fast path: Non-move, non-click, and non-scroll events pass through instantly
+            if not is_move and not is_click and not is_scroll:
                 return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
 
-            raw_delta = ctypes.c_short((hook_struct.mouseData >> 16) & 0xFFFF).value
-            # Invert scroll direction (pure chaos: down scrolls up, up scrolls down)
-            inverted_delta = -raw_delta
-            is_horizontal = (wParam == WM_MOUSEHWHEEL)
-            self._injection_queue.put(("SCROLL", inverted_delta, is_horizontal))
+            hook_struct = ctypes.cast(lParam, PMSLLHOOKSTRUCT).contents
+
+            # Recursion check
+            is_injected = bool(hook_struct.flags & (LLMHF_INJECTED | LLMHF_LOWER_IL_INJECTED))
+            is_our_event = (hook_struct.dwExtraInfo == CHAOS_EXTRA_INFO)
+
+            if is_injected or is_our_event:
+                return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
+
+            # Enforce Cursor Lock: If cursor is locked, strictly freeze it and block input
+            with self._lock:
+                locked = self._is_cursor_locked
+                locked_pos = self._locked_pos
+
+            if locked:
+                if locked_pos:
+                    lx, ly = locked_pos
+                    rect = RECT(lx, ly, lx + 1, ly + 1)
+                    user32.ClipCursor(ctypes.byref(rect))
+                    user32.SetCursorPos(lx, ly)
+                return 1
+
+            # Fast path: Mouse movement passes through when not locked
+            if is_move:
+                return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
+
+            # If Chaos Mode is not active, let clicks and scrolls pass through
+            if not self._is_active:
+                return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
+
+            # Handle Scroll Wheel Events
+            if is_scroll:
+                if not self._is_scroll_chaos_enabled:
+                    return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
+
+                raw_delta = ctypes.c_short((hook_struct.mouseData >> 16) & 0xFFFF).value
+                # Invert scroll direction (pure chaos: down scrolls up, up scrolls down)
+                inverted_delta = -raw_delta
+                is_horizontal = (wParam == WM_MOUSEHWHEEL)
+                self._injection_queue.put(("SCROLL", inverted_delta, is_horizontal))
+                return 1
+
+            # Handle Click Messages
+            event_info = self._decode_mouse_event(wParam, hook_struct.mouseData)
+            if event_info is None:
+                return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
+
+            phys_button, is_down = event_info
+
+            # Map button and track state
+            with self._lock:
+                if is_down:
+                    target_button = self.randomizer.map_button(phys_button)
+                    self._active_presses[phys_button] = target_button
+
+                    self._click_count += 1
+                    if self._click_count % 5 == 0:
+                        self.lock_cursor()
+                        if self._on_stuck_callback:
+                            # Call asynchronously to not block the low level hook thread
+                            threading.Thread(target=self._on_stuck_callback, daemon=True).start()
+                        # Do not teleport or inject synthetic click when cursor is now locked
+                        return 1
+
+                    # If teleportation is enabled, teleport cursor on non-locking click down
+                    if self._is_teleport_enabled:
+                        self._injection_queue.put(("TELEPORT", 0, 0))
+                else:
+                    target_button = self._active_presses.pop(
+                        phys_button, self.randomizer.map_button(phys_button)
+                    )
+
+            self._injection_queue.put((target_button, is_down))
             return 1
-
-        # Handle Click Messages
-        event_info = self._decode_mouse_event(wParam, hook_struct.mouseData)
-        if event_info is None:
+        except Exception as e:
+            logger.debug("Error in _low_level_mouse_proc: %s", e)
             return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
-
-        phys_button, is_down = event_info
-
-        # If teleportation is enabled, teleport cursor on click down
-        if self._is_teleport_enabled and is_down:
-            self._injection_queue.put(("TELEPORT", 0, 0))
-
-        # Map button and track state
-        with self._lock:
-            if is_down:
-                target_button = self.randomizer.map_button(phys_button)
-                self._active_presses[phys_button] = target_button
-
-                self._click_count += 1
-                if self._click_count % 5 == 0:
-                    self.lock_cursor()
-                    if self._on_stuck_callback:
-                        # Call asynchronously to not block the low level hook thread
-                        threading.Thread(target=self._on_stuck_callback, daemon=True).start()
-            else:
-                target_button = self._active_presses.pop(
-                    phys_button, self.randomizer.map_button(phys_button)
-                )
-
-        self._injection_queue.put((target_button, is_down))
-        return 1
 
     def _decode_mouse_event(self, wParam: int, mouseData: int = 0) -> Optional[tuple[ButtonType, bool]]:
         """Map Windows message and mouseData to (ButtonType, is_down). Returns None for non-clicks."""
