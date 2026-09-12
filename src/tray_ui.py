@@ -121,11 +121,13 @@ class TrayUI:
         randomizer: ButtonRandomizer,
         hook_manager: MouseHookManager,
         hotkey_manager: Optional[HotkeyManager] = None,
+        flashbang_manager: Optional[Any] = None,
         on_exit_callback: Optional[Callable[[], None]] = None,
     ) -> None:
         self.randomizer = randomizer
         self.hook_manager = hook_manager
         self.hotkey_manager = hotkey_manager
+        self.flashbang_manager = flashbang_manager
         self.on_exit_callback = on_exit_callback
 
         self._active_icon_img = generate_tray_image(64, active=True, locked=False)
@@ -223,6 +225,19 @@ class TrayUI:
         self.update_ui()
         logger.info("Scroll Wheel Chaos toggled: %s", "ENABLED" if new_state else "DISABLED")
         return new_state
+
+    def toggle_flashbang(self) -> bool:
+        """Toggle random flashbang chaos on/off."""
+        if self.flashbang_manager:
+            new_state = self.flashbang_manager.toggle()
+            self.update_ui()
+            return new_state
+        return False
+
+    def trigger_flashbang_now(self) -> None:
+        """Trigger an instant flashbang."""
+        if self.flashbang_manager:
+            self.flashbang_manager.trigger_flash()
 
     def randomize_now(self) -> None:
         """Trigger re-shuffle and refresh UI."""
@@ -323,6 +338,12 @@ class TrayUI:
     def _toggle_scroll_chaos(self, icon: Optional[pystray.Icon], item: Optional[MenuItem]) -> None:
         self.toggle_scroll_chaos()
 
+    def _toggle_flashbang(self, icon: Optional[pystray.Icon], item: Optional[MenuItem]) -> None:
+        self.toggle_flashbang()
+
+    def _trigger_flashbang_now(self, icon: Optional[pystray.Icon], item: Optional[MenuItem]) -> None:
+        self.trigger_flashbang_now()
+
     def _build_menu(self) -> Menu:
         """Construct the dynamic tray context menu."""
         def get_status_label(item: MenuItem) -> str:
@@ -342,6 +363,9 @@ class TrayUI:
 
         def is_scroll_chaos_on(item: MenuItem) -> bool:
             return self.hook_manager.is_scroll_chaos_enabled
+
+        def is_flashbang_on(item: MenuItem) -> bool:
+            return self.flashbang_manager.enabled if self.flashbang_manager else False
 
         def is_auto_shuffle_on(item: MenuItem) -> bool:
             return self.randomizer.auto_shuffle_enabled
@@ -453,6 +477,12 @@ class TrayUI:
                 self._toggle_scroll_chaos,
                 checked=is_scroll_chaos_on,
             ),
+            MenuItem(
+                "Random Flashbang Chaos",
+                self._toggle_flashbang,
+                checked=is_flashbang_on,
+            ),
+            MenuItem("Detonate Flashbang Now", self._trigger_flashbang_now),
             MenuItem("Randomize Buttons Now", self._randomize_now),
             MenuItem("Emergency Disable [Ctrl+Alt+X]", self._emergency_disable),
             Menu.SEPARATOR,

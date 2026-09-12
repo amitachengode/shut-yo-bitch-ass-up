@@ -26,6 +26,7 @@ YELLOW = "\033[93m"
 RED = "\033[91m"
 CYAN = "\033[96m"
 MAGENTA = "\033[95m"
+GRAY = "\033[90m"
 RESET = "\033[0m"
 
 # Standard Linux Kernel Input Subsystem UAPI Constants (<linux/input-event-codes.h>)
@@ -109,11 +110,11 @@ class LinuxMouseChaosManager:
     }
 
     BUTTON_COLORS = {
-        0x110: "\033[94m",  # Blue
-        0x111: "\033[91m",  # Red
-        0x112: "\033[92m",  # Green
-        0x113: "\033[93m",  # Yellow
-        0x114: "\033[95m",  # Magenta
+        0x110: CYAN,
+        0x111: CYAN,
+        0x112: CYAN,
+        0x113: CYAN,
+        0x114: CYAN,
     }
 
     # Keys that identify keyboards to exclude them
@@ -128,12 +129,12 @@ class LinuxMouseChaosManager:
     def __init__(
         self,
         device_path: Optional[str] = None,
-        shuffle_interval: float = 5.0,
+        shuffle_interval: float = 3.0,
         scroll_chaos: bool = True,
         cursor_drift: bool = False,
         failsafe_hold_duration: float = 5.0,
         auto_exit_seconds: float = 0.0,
-        include_side_buttons: bool = True,
+        include_side_buttons: bool = False,
     ) -> None:
         self.device_path = device_path
         self.shuffle_interval = shuffle_interval
@@ -226,36 +227,46 @@ class LinuxMouseChaosManager:
         lines = []
         border = f"{CYAN}═" * 60 + f"{RESET}"
         lines.append(border)
-        lines.append(f"{CYAN}║{RESET}  {BOLD}{MAGENTA}LINUX CLICKCHAOS: ACTIVE MOUSE BUTTON MAPPING{RESET}")
-        lines.append(f"{CYAN}║{RESET}  {YELLOW}Kernel Subsystem: evdev + EVIOCGRAB virtual injection{RESET}")
+        lines.append(f"{CYAN}║{RESET}  {BOLD}{CYAN}LINUX CLICKCHAOS: ACTIVE MOUSE BUTTON MAPPING{RESET}")
+        lines.append(f"{CYAN}║{RESET}  Kernel Subsystem: evdev + EVIOCGRAB virtual injection")
         lines.append(border)
 
         for src in self._available_buttons:
             dst = self._button_mapping.get(src, src)
             src_name = self.BUTTON_NAMES.get(src, f"0x{src:x}")
             dst_name = self.BUTTON_NAMES.get(dst, f"0x{dst:x}")
-            src_col = self.BUTTON_COLORS.get(src, CYAN)
-            dst_col = self.BUTTON_COLORS.get(dst, YELLOW)
 
             lines.append(
-                f"{CYAN}║{RESET}  {src_col}{BOLD}{src_name:<26}{RESET} ➔ {dst_col}{BOLD}{dst_name}{RESET}"
+                f"{CYAN}║{RESET}  {RESET}{src_name:<26}{RESET} {CYAN}➔{RESET} {CYAN}{BOLD}{dst_name}{RESET}"
             )
 
         lines.append(border)
-        scroll_status = f"{GREEN}INVERTED (Chaotic){RESET}" if self.scroll_chaos else f"{YELLOW}NORMAL{RESET}"
-        drift_status = f"{MAGENTA}ENABLED (Slippery){RESET}" if self.cursor_drift else f"{YELLOW}DISABLED{RESET}"
+        scroll_status = f"{CYAN}INVERTED (Chaotic){RESET}" if self.scroll_chaos else "NORMAL"
+        drift_status = f"{CYAN}ENABLED (Slippery){RESET}" if self.cursor_drift else "DISABLED"
         lines.append(f"{CYAN}║{RESET}  Scroll Wheel Chaos : {scroll_status}")
         lines.append(f"{CYAN}║{RESET}  Cursor Drift       : {drift_status}")
         lines.append(
-            f"{CYAN}║{RESET}  {RED}{BOLD}SAFETY FAILSAFE    : Hold [Left + Right Click] for 5.0s to Exit!{RESET}"
+            f"{CYAN}║{RESET}  {CYAN}{BOLD}SAFETY FAILSAFE    : Hold [Left + Right Click] for 5.0s to Exit!{RESET}"
         )
         lines.append(border)
         return "\n".join(lines)
 
+    def get_colored_mapping_line(self) -> str:
+        """Generate a duo-color single-line display showing the current button remap."""
+        now = time.strftime("%H:%M:%S")
+        parts = []
+        for src in self._available_buttons:
+            dst = self._button_mapping.get(src, src)
+            src_name = self.BUTTON_NAMES.get(src, f"0x{src:x}").split(" (")[0].replace(" Click", "")
+            dst_name = self.BUTTON_NAMES.get(dst, f"0x{dst:x}").split(" (")[0].replace(" Click", "")
+            parts.append(f"{RESET}{src_name}{RESET} {CYAN}➔{RESET} {CYAN}{BOLD}{dst_name}{RESET}")
+        sep = f" {RESET}│{RESET} "
+        return f"[{now}] {CYAN}{BOLD}Remap:{RESET} {sep.join(parts)}"
+
     def print_mapping_card(self) -> None:
-        """Print the colored mapping card to stdout."""
+        """Print the colored mapping line to stdout."""
         try:
-            print("\n" + self.get_colored_mapping_card() + "\n", flush=True)
+            print(self.get_colored_mapping_line(), flush=True)
         except Exception as e:
             logger.info("Button Mapping: %s", self._button_mapping)
 
@@ -481,7 +492,7 @@ def run_linux_chaos(args: Any) -> None:
         sys.exit(1)
 
     device_arg = getattr(args, "device", None)
-    interval_arg = getattr(args, "interval", 5.0)
+    interval_arg = getattr(args, "interval", 3.0)
     no_scroll = getattr(args, "no_scroll_chaos", False)
     no_xbuttons = getattr(args, "no_xbuttons", False)
     drift = getattr(args, "drift", False)

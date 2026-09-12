@@ -45,19 +45,20 @@ ALL_BUTTONS: List[ButtonType] = [
     ButtonType.XBUTTON2,
 ]
 
-# ANSI Terminal Colors
+# ANSI Terminal Colors (Duo-color palette: terminal default white/black and cyan)
 RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
+CYAN = "\033[96m"
 GRAY = "\033[90m"
 WHITE = "\033[97m"
 
 BUTTON_COLORS: Dict[ButtonType, str] = {
-    ButtonType.LEFT: "\033[91m",       # Bright Red / Coral
-    ButtonType.RIGHT: "\033[96m",      # Bright Cyan / Blue
-    ButtonType.MIDDLE: "\033[93m",     # Bright Yellow / Gold
-    ButtonType.XBUTTON1: "\033[95m",   # Bright Magenta / Violet
-    ButtonType.XBUTTON2: "\033[92m",   # Bright Lime Green
+    ButtonType.LEFT: CYAN,
+    ButtonType.RIGHT: CYAN,
+    ButtonType.MIDDLE: CYAN,
+    ButtonType.XBUTTON1: CYAN,
+    ButtonType.XBUTTON2: CYAN,
 }
 
 
@@ -114,10 +115,10 @@ class ButtonRandomizer:
 
     def __init__(
         self,
-        interval_seconds: float = 5.0,
+        interval_seconds: float = 3.0,
         derangement_only: bool = True,
         include_middle: bool = True,
-        include_xbuttons: Optional[bool] = None,
+        include_xbuttons: Optional[bool] = False,
         on_change_callback: Optional[Callable[[Dict[ButtonType, ButtonType]], None]] = None,
     ) -> None:
         """Initialize randomizer.
@@ -125,7 +126,7 @@ class ButtonRandomizer:
         :param interval_seconds: Seconds between automatic reshuffles.
         :param derangement_only: If True, guarantees no button maps to itself (pure chaos).
         :param include_middle: Include Middle mouse click in random swap.
-        :param include_xbuttons: Include XButton1 and XButton2 (Mouse 4/5 hotkeys). If None, auto-detected.
+        :param include_xbuttons: Include XButton1 and XButton2 (Mouse 4/5 hotkeys). Default is False.
         :param on_change_callback: Optional callable triggered when mapping updates.
         """
         self._interval_seconds = max(1.0, float(interval_seconds))
@@ -312,43 +313,46 @@ class ButtonRandomizer:
             return " | ".join(parts)
 
     def get_colored_summary_string(self, short: bool = False) -> str:
-        """Return ANSI-colored one-line summary of the current mapping."""
+        """Return duo-colored (terminal default and cyan) one-line summary of the current mapping."""
         active = self.get_active_buttons()
         with self._lock:
             m = self._mapping
             parts = [
-                f"{get_button_colored_name(b, short)} \033[37m➔\033[0m {get_button_colored_name(m.get(b, b), short)}"
+                f"{RESET}{b.short_name if short else b.value}{RESET} {CYAN}➔{RESET} {CYAN}{BOLD}{m.get(b, b).short_name if short else m.get(b, b).value}{RESET}"
                 for b in active
             ]
-            sep = f" {GRAY}│{RESET} "
+            sep = f" {RESET}│{RESET} "
             return sep.join(parts)
 
+    def get_colored_mapping_line(self, short: bool = False) -> str:
+        """Return a formatted, duo-color single-line display showing the current button remap."""
+        now = time.strftime("%H:%M:%S")
+        return f"[{now}] {CYAN}{BOLD}Remap:{RESET} {self.get_colored_summary_string(short=short)}"
+
     def get_colored_mapping_card(self) -> str:
-        """Return a formatted, colored card display showing the complete button translation."""
+        """Return a formatted, duo-color card display showing the complete button translation."""
         active = self.get_active_buttons()
         now = time.strftime("%H:%M:%S")
         with self._lock:
             m = self._mapping
-            header = f"{GRAY}┌─{RESET} \033[93m{BOLD}🎲 [MOUSE BUTTONS RANDOMIZED]{RESET} {GRAY}[{now}]{RESET} "
+            header = f"{CYAN}┌─ {BOLD}[MOUSE BUTTONS RANDOMIZED]{RESET} [{now}] "
             card_lines = [
-                header + f"{GRAY}" + ("─" * max(4, 58 - len(header) + 32)) + f"┐{RESET}"
+                header + f"{CYAN}" + ("─" * max(4, 58 - len(header) + 32)) + f"┐{RESET}"
             ]
             for b in active:
                 target = m.get(b, b)
-                src_color = BUTTON_COLORS.get(b, WHITE)
-                tgt_color = BUTTON_COLORS.get(target, WHITE)
                 line = (
-                    f"{GRAY}│{RESET}  {src_color}{BOLD}{b.value:<10}{RESET} {GRAY}({b.short_name:>2}){RESET} "
-                    f"\033[37m➔\033[0m  "
-                    f"{tgt_color}{BOLD}{target.value:<10}{RESET} {GRAY}({target.short_name:>2}){RESET}"
+                    f"{CYAN}│{RESET}  {RESET}{b.value:<10}{RESET} "
+                    f"{CYAN}➔{RESET}  "
+                    f"{CYAN}{BOLD}{target.value:<10}{RESET}"
                 )
-                card_lines.append(f"{line:<68} {GRAY}│{RESET}")
+                card_lines.append(f"{line:<68} {CYAN}│{RESET}")
             
             # Add one-line summary footer inside the card
-            summary_line = f"{GRAY}│{RESET}  {BOLD}Summary:{RESET} {self.get_colored_summary_string(short=True)}"
-            card_lines.append(f"{GRAY}├──────────────────────────────────────────────────────────┤{RESET}")
+            summary_line = f"{CYAN}│{RESET}  {BOLD}Summary:{RESET} {self.get_colored_summary_string(short=True)}"
+            card_lines.append(f"{CYAN}├──────────────────────────────────────────────────────────┤{RESET}")
             card_lines.append(f"{summary_line}")
-            card_lines.append(f"{GRAY}└──────────────────────────────────────────────────────────┘{RESET}")
+            card_lines.append(f"{CYAN}└──────────────────────────────────────────────────────────┘{RESET}")
             return "\n".join(card_lines)
 
     def start_auto_shuffle(self) -> None:

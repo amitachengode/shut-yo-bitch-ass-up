@@ -37,8 +37,8 @@ def main() -> None:
     parser.add_argument(
         "--interval",
         type=float,
-        default=5.0,
-        help="Interval in seconds between random shuffles (default: 5.0s)",
+        default=3.0,
+        help="Interval in seconds between random shuffles (default: 3.0s)",
     )
     parser.add_argument(
         "--no-scroll-chaos",

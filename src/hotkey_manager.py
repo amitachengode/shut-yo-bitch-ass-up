@@ -389,7 +389,7 @@ class HotkeyManager:
             success = user32.RegisterHotKey(None, cfg.hotkey_id, cfg.modifiers, cfg.vk_code)
             if success:
                 self._registered_ids.append(cfg.hotkey_id)
-                logger.info("Registered global hotkey: %s", cfg.name)
+                logger.debug("Registered global hotkey: %s", cfg.name)
             else:
                 err = ctypes.GetLastError()
                 logger.warning(

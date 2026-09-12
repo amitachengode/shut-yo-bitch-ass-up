@@ -75,6 +75,10 @@ XBUTTON2 = 0x0002
 
 SM_CXSCREEN = 0
 SM_CYSCREEN = 1
+SM_XVIRTUALSCREEN = 76
+SM_YVIRTUALSCREEN = 77
+SM_CXVIRTUALSCREEN = 78
+SM_CYVIRTUALSCREEN = 79
 
 # Custom signature to tag ClickChaos injected events
 CHAOS_EXTRA_INFO = 0xC11C4CA0
@@ -266,18 +270,22 @@ class MouseHookManager:
         return new_state
 
     def teleport_cursor(self) -> tuple[int, int]:
-        """Teleport mouse cursor to a random screen coordinate."""
-        cx = user32.GetSystemMetrics(SM_CXSCREEN)
-        cy = user32.GetSystemMetrics(SM_CYSCREEN)
-        if cx <= 0:
-            cx = 1920
-        if cy <= 0:
-            cy = 1080
+        """Teleport mouse cursor to a random screen coordinate across all monitors."""
+        vx = user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+        vy = user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+        vw = user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
+        vh = user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
+        if vw <= 0 or vh <= 0:
+            vx, vy, vw, vh = 0, 0, user32.GetSystemMetrics(SM_CXSCREEN), user32.GetSystemMetrics(SM_CYSCREEN)
+        if vw <= 0:
+            vw = 1920
+        if vh <= 0:
+            vh = 1080
 
-        rx = random.randint(50, max(50, cx - 50))
-        ry = random.randint(50, max(50, cy - 50))
+        rx = random.randint(vx + 50, max(vx + 50, vx + vw - 50))
+        ry = random.randint(vy + 50, max(vy + 50, vy + vh - 50))
         user32.SetCursorPos(rx, ry)
-        logger.debug("Cursor teleported to (%d, %d)", rx, ry)
+        logger.info("🌀 Mouse cursor teleported to (%d, %d)", rx, ry)
         return (rx, ry)
 
     @property
@@ -439,7 +447,7 @@ class MouseHookManager:
             self._ready_event.set()
             return
 
-        logger.info("WH_MOUSE_LL hook installed successfully.")
+        logger.debug("WH_MOUSE_LL hook installed successfully.")
         self._ready_event.set()
 
         msg = wintypes.MSG()

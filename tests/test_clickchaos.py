@@ -110,6 +110,11 @@ class TestButtonRandomizer:
         for col in BUTTON_COLORS.values():
             assert col in col_summary
 
+        line = randomizer.get_colored_mapping_line()
+        assert "Remap:" in line
+        assert "➔" in line
+        assert RESET in line
+
         card = randomizer.get_colored_mapping_card()
         assert "MOUSE BUTTONS RANDOMIZED" in card
         assert "Summary:" in card
@@ -186,10 +191,10 @@ class TestButtonRandomizer:
         assert not randomizer.auto_shuffle_enabled
         assert len(updates) >= 1
 
-    def test_default_interval_is_5_seconds(self):
-        """Default auto-shuffle interval must be 5.0 seconds."""
+    def test_default_interval_is_3_seconds(self):
+        """Default auto-shuffle interval must be 3.0 seconds."""
         randomizer = ButtonRandomizer()
-        assert randomizer.interval_seconds == 5.0
+        assert randomizer.interval_seconds == 3.0
 
     def test_button_4_and_5_presence_detection(self):
         from src.randomizer import are_buttons_4_and_5_present, detect_mouse_button_count
@@ -421,7 +426,7 @@ class TestTrayUIBehavior:
         assert dummy_icon.menu_updated
 
     def test_tray_public_shortcut_methods(self):
-        randomizer = ButtonRandomizer()
+        randomizer = ButtonRandomizer(include_xbuttons=True)
         mgr = MouseHookManager(randomizer=randomizer)
         from src.tray_ui import TrayUI
         tray = TrayUI(randomizer=randomizer, hook_manager=mgr)
@@ -526,3 +531,54 @@ class TestHotkeyManager:
         # Reset to defaults
         hm.reset_to_default_hotkeys()
         assert hm._action_keys == HotkeyManager.DEFAULT_ACTION_KEYS
+
+
+class TestFlashbangManager:
+    def test_flashbang_manager_initialization(self):
+        from src.flashbang import FlashbangManager
+
+        fm = FlashbangManager(min_interval=10.0, max_interval=30.0, fade_duration=2.0, sound_enabled=False)
+        assert fm.min_interval == 10.0
+        assert fm.max_interval == 30.0
+        assert fm.fade_duration == 2.0
+        assert not fm.sound_enabled
+        assert fm.enabled
+
+    def test_flashbang_manager_toggle_and_properties(self):
+        from src.flashbang import FlashbangManager
+
+        fm = FlashbangManager(enabled=True)
+        assert fm.enabled is True
+        assert fm.toggle() is False
+        assert fm.enabled is False
+        assert fm.toggle() is True
+        assert fm.enabled is True
+
+        fm.enabled = False
+        assert fm.enabled is False
+
+    def test_flashbang_scheduler_start_stop(self):
+        from src.flashbang import FlashbangManager
+
+        fm = FlashbangManager(min_interval=5.0, max_interval=10.0, sound_enabled=False)
+        fm.start_scheduler()
+        assert fm._timer_thread is not None
+        assert fm._timer_thread.is_alive()
+
+        # Idempotent start
+        fm.start_scheduler()
+
+        # Stop scheduler
+        fm.stop_scheduler()
+        assert fm._stop_event.is_set()
+
+    def test_flashbang_trigger_flash_invocation(self):
+        from src.flashbang import FlashbangManager
+
+        fm = FlashbangManager(sound_enabled=False)
+        # Trigger with very short fade duration so it runs and terminates quickly
+        fm.trigger_flash(fade_duration=0.1)
+        # Give worker thread a moment to start and complete
+        time.sleep(0.3)
+        assert not fm._is_flashing
+

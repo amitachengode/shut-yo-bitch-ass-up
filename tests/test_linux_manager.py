@@ -122,6 +122,19 @@ class TestLinuxChaosLogic:
         assert "INVERTED" in card
         assert "SAFETY FAILSAFE" in card
 
+    def test_colored_mapping_line(self):
+        manager = LinuxMouseChaosManager(scroll_chaos=True, cursor_drift=True)
+        manager._available_buttons = [BTN_LEFT, BTN_RIGHT, BTN_MIDDLE]
+        manager._button_mapping = {BTN_LEFT: BTN_RIGHT, BTN_RIGHT: BTN_MIDDLE, BTN_MIDDLE: BTN_LEFT}
+        line = manager.get_colored_mapping_line()
+
+        assert "Remap:" in line
+        assert "Left" in line
+        assert "Right" in line
+        assert "Middle" in line
+        assert "➔" in line
+
+
 
 class TestLinuxEventTranslation:
     def test_button_press_and_release_mapping(self):
