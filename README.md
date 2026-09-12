@@ -2,7 +2,7 @@
 
 
 
-# Nokanda kittoola 🎯
+# Nokanda Kittoola
 
 
 ## Basic Details
