@@ -107,6 +107,7 @@ class HotkeyManager:
     HOTKEY_ID_SHUFFLE_HOTKEYS = 1009
     HOTKEY_ID_TOGGLE_TELEPORT = 1010
     HOTKEY_ID_TOGGLE_SCROLL = 1011
+    HOTKEY_ID_UNLOCK = 2000
 
     DEFAULT_ACTION_KEYS = {
         "toggle_chaos": (VK_C, "C"),
@@ -154,6 +155,7 @@ class HotkeyManager:
         self._registered_ids: List[int] = []
         self._handlers: Dict[int, Callable[[], None]] = {}
         self._active_configs: List[HotkeyConfig] = []
+        self._temp_configs: List[HotkeyConfig] = []
 
     def _build_hotkeys(self) -> List[HotkeyConfig]:
         """Construct the list of hotkey configurations based on current action keys."""
@@ -289,6 +291,9 @@ class HotkeyManager:
                 )
             )
 
+        with self._lock:
+            configs.extend(self._temp_configs)
+
         return configs
 
     def randomize_action_hotkeys(self) -> List[HotkeyConfig]:
@@ -324,6 +329,32 @@ class HotkeyManager:
             self._action_keys = dict(self.DEFAULT_ACTION_KEYS)
         self.reload_hotkeys()
         return self.get_active_configs()
+
+    def register_unlock_key(self, letter: str, callback: Callable[[], None]) -> None:
+        """Register a temporary single letter unlock key."""
+        vk_code = ord(letter.upper())
+
+        def wrapped_callback():
+            callback()
+            # Unregister after firing
+            with self._lock:
+                self._temp_configs = [c for c in self._temp_configs if c.hotkey_id != self.HOTKEY_ID_UNLOCK]
+            self.reload_hotkeys()
+
+        cfg = HotkeyConfig(
+            self.HOTKEY_ID_UNLOCK,
+            0, # MOD_NONE
+            vk_code,
+            f"Unlock ({letter.upper()})",
+            wrapped_callback
+        )
+        
+        with self._lock:
+            # Remove any existing unlock keys first
+            self._temp_configs = [c for c in self._temp_configs if c.hotkey_id != self.HOTKEY_ID_UNLOCK]
+            self._temp_configs.append(cfg)
+            
+        self.reload_hotkeys()
 
     def reload_hotkeys(self) -> None:
         """Trigger message thread to unregister and re-register hotkeys."""

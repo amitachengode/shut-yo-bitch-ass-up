@@ -276,6 +276,17 @@ def main() -> None:
         )
         tray.hotkey_manager = hotkey_manager
         hotkey_manager.start()
+        
+        import string
+        import random
+        def on_stuck():
+            letter = random.choice(string.ascii_uppercase)
+            print(f"\n==============================================", flush=True)
+            print(f"   CURSOR STUCK! Press '{letter}' to unlock!  ", flush=True)
+            print(f"==============================================\n", flush=True)
+            hotkey_manager.register_unlock_key(letter, lambda: hook_manager.unlock_cursor())
+            
+        hook_manager.set_on_stuck_callback(on_stuck)
 
     # 7. Launch System Tray UI (blocks main thread until exit)
     try:

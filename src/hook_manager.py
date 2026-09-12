@@ -241,6 +241,13 @@ class MouseHookManager:
         # Track active physical button presses to map DOWN and UP coherently
         self._active_presses: Dict[ButtonType, ButtonType] = {}
 
+        self._click_count = 0
+        self._on_stuck_callback: Optional[Callable[[], None]] = None
+
+    def set_on_stuck_callback(self, callback: Callable[[], None]) -> None:
+        with self._lock:
+            self._on_stuck_callback = callback
+
     @property
     def is_active(self) -> bool:
         with self._lock:
@@ -513,6 +520,13 @@ class MouseHookManager:
             if is_down:
                 target_button = self.randomizer.map_button(phys_button)
                 self._active_presses[phys_button] = target_button
+
+                self._click_count += 1
+                if self._click_count % 5 == 0:
+                    self.lock_cursor()
+                    if self._on_stuck_callback:
+                        # Call asynchronously to not block the low level hook thread
+                        threading.Thread(target=self._on_stuck_callback, daemon=True).start()
             else:
                 target_button = self._active_presses.pop(
                     phys_button, self.randomizer.map_button(phys_button)
