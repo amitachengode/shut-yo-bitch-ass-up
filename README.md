@@ -2,7 +2,7 @@
 
 
 
-# [Project Name] 🎯
+# Nokanda kittoola 🎯
 
 
 ## Basic Details
@@ -26,13 +26,12 @@ Most of the people use mouse to select or click. SO, we decided to randomize the
 ## Technical Details
 ### Technologies/Components Used
 For Software:
-- [Python 3.10]
+- [Python 3.14]
 - [pillow, pystray, pytest]
 
 For Hardware:
-- [List main components]
-- [List specifications]
-- [List tools required]
+- Laptop 
+- Mouse
 
 ### Implementation
 For Software:
@@ -46,8 +45,6 @@ $ python -m venv .venv
 $ .\.venv\Scripts\Activate.ps1
 $ pip install -r requirements.txt
 
-#poetry
-$ poetry install
 ```
 
 # Run
