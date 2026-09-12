@@ -189,6 +189,21 @@ else
     echo "  [+] Dependencies installed successfully."
 fi
 
+# Ensure Linux kernel input library is installed when on Linux
+if [ "$(uname -s 2>/dev/null)" = "Linux" ]; then
+    if ! "$VENV_PY" -c "import evdev" >/dev/null 2>&1; then
+        echo "  [-] Installing Linux evdev library..."
+        if [ "$PKG_MGR" = "uv" ]; then
+            uv pip install "evdev>=1.6.0" --python "$VENV_PY"
+        else
+            "$VENV_PY" -m pip install "evdev>=1.6.0"
+        fi
+        echo "  [+] Linux evdev installed successfully."
+    else
+        echo "  [+] Linux kernel input library (evdev) is installed."
+    fi
+fi
+
 echo ""
 
 # ------------------------------------------------------------------------------

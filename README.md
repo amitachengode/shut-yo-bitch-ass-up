@@ -38,12 +38,30 @@ For Hardware:
 For Software:
 # Installation
 ```bash
+#uv
 $ uv sync
+
+#pip
+$ python -m venv .venv
+$ .\.venv\Scripts\Activate.ps1
+$ pip install -r requirements.txt
+
+#poetry
+$ poetry install
 ```
 
 # Run
 ```bash
+#uv
 $ uv run python main.py
+
+# or just use 
+
+#windows (comes with installation and all)
+$ ./run.bat
+
+#Linux / macos (comes with installation and all)
+$ ./run.sh
 ```
 
 ### Project Documentation

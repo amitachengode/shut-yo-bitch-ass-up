@@ -1,7 +1,7 @@
 """ClickChaos - Desktop Mouse Button Chaos Utility
 
 Main entry point. Coordinates the low-level mouse hook, button randomizer,
-system tray interface, and keyboard failsafe.
+system tray interface, cursor locking, and keyboard failsafes.
 """
 
 from __future__ import annotations
@@ -42,6 +42,26 @@ def main() -> None:
         help="Start with Chaos Mode immediately active.",
     )
     parser.add_argument(
+        "--lock-cursor",
+        action="store_true",
+        help="Start with mouse cursor immediately locked/frozen.",
+    )
+    parser.add_argument(
+        "--teleport",
+        action="store_true",
+        help="Start with mouse cursor teleportation immediately active.",
+    )
+    parser.add_argument(
+        "--no-scroll-chaos",
+        action="store_true",
+        help="Disable chaotic scroll wheel inversion.",
+    )
+    parser.add_argument(
+        "--no-xbuttons",
+        action="store_true",
+        help="Disable swapping side mouse hotkey buttons (XButton1 and XButton2).",
+    )
+    parser.add_argument(
         "--interval",
         type=float,
         default=5.0,
@@ -57,36 +77,108 @@ def main() -> None:
         action="store_true",
         help="Disable global keyboard shortcuts.",
     )
+    # Linux-specific arguments
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="[Linux] Explicit path to /dev/input/eventX device.",
+    )
+    parser.add_argument(
+        "--drift",
+        action="store_true",
+        help="[Linux] Enable slippery cursor drift chaos.",
+    )
+    parser.add_argument(
+        "--auto-exit",
+        type=float,
+        default=0.0,
+        help="[Linux/Failsafe] Automatically exit after N seconds (0 = disabled).",
+    )
 
     args = parser.parse_args()
     setup_logging(args.debug)
     logger = logging.getLogger("ClickChaos.Main")
+
+    # --- Operating System Detection ---
+    if sys.platform.startswith("linux"):
+        from src.linux_manager import run_linux_chaos
+        run_linux_chaos(args)
+        return
 
     logger.info("Initializing ClickChaos...")
     logger.info("Controls:")
     logger.info("  • System Tray Icon: Right-click for menu, double-click to toggle")
     logger.info("  • Keyboard Shortcuts:")
     logger.info("      [Ctrl + Alt + C] or [Ctrl + Shift + C] : Toggle Chaos Mode")
-    logger.info("      [Ctrl + Alt + R]                       : Randomize Mapping Now")
+    logger.info("      [Ctrl + Alt + R]                       : Randomize Button Mapping Now")
+    logger.info("      [Ctrl + Alt + L]                       : Toggle Cursor Lock (Freeze Cursor)")
+    logger.info("      [Ctrl + Alt + T]                       : Toggle Mouse Teleportation")
+    logger.info("      [Ctrl + Alt + W]                       : Toggle Scroll Wheel Chaos")
+    logger.info("      [Ctrl + Alt + K]                       : Shuffle Keyboard Shortcuts")
     logger.info("      [Ctrl + Alt + X]                       : Emergency Panic Disable")
-    logger.info("      [Ctrl + Alt + M]                       : Toggle 3-Button / 2-Button Mode")
+    logger.info("      [Ctrl + Alt + M]                       : Cycle Button Swap Mode (5 / 3 / 2 buttons)")
     logger.info("      [Ctrl + Alt + Q]                       : Exit ClickChaos")
+
+    from src.randomizer import are_buttons_4_and_5_present, detect_mouse_button_count
+
+    btn_count = detect_mouse_button_count()
+    has_xbtns = are_buttons_4_and_5_present()
+
+    if args.no_xbuttons:
+        include_x = False
+        logger.info("Mouse hardware: %d buttons detected. Buttons 4 & 5 disabled via --no-xbuttons flag.", btn_count)
+    elif has_xbtns:
+        include_x = True
+        logger.info(
+            "Mouse hardware: %d buttons detected. Buttons 4 & 5 (X1 & X2 side hotkeys) are PRESENT and ENABLED for randomizing.",
+            btn_count,
+        )
+    else:
+        include_x = False
+        logger.info(
+            "Mouse hardware: %d buttons detected. Buttons 4 & 5 (X1 & X2) are NOT present on this mouse and will be IGNORED for randomizing.",
+            btn_count,
+        )
 
     # 1. Initialize Randomizer
     randomizer = ButtonRandomizer(
         interval_seconds=args.interval,
         derangement_only=True,
+        include_middle=True,
+        include_xbuttons=include_x,
     )
+
+    def print_colored_mapping(mapping: Dict[ButtonType, ButtonType]) -> None:
+        try:
+            print("\n" + randomizer.get_colored_mapping_card() + "\n", flush=True)
+        except Exception:
+            logger.info("New Mapping: %s", randomizer.get_summary_string())
+
+    randomizer.add_change_callback(print_colored_mapping)
+    # Display initial randomized mapping on startup
+    print_colored_mapping(randomizer.get_mapping())
+
     # Enable background auto-shuffle
     randomizer.start_auto_shuffle()
 
     # 2. Initialize Low-level Hook Manager
     hook_manager = MouseHookManager(randomizer=randomizer)
+    if args.teleport:
+        logger.info("Teleport mode requested: Enabling mouse cursor teleportation on startup.")
+        hook_manager.set_teleport_enabled(True)
+    if args.no_scroll_chaos:
+        hook_manager.set_scroll_chaos_enabled(False)
+
     hook_manager.start()
 
     if args.autostart:
         logger.info("Autostart requested: Enabling Chaos Mode immediately.")
         hook_manager.set_active(True)
+
+    if args.lock_cursor:
+        logger.info("Lock cursor requested: Locking mouse cursor immediately.")
+        hook_manager.lock_cursor()
 
     # 3. Clean shutdown handler
     shutdown_lock = threading.Lock()
@@ -111,7 +203,6 @@ def main() -> None:
 
     def signal_handler(signum, frame):
         shutdown()
-        # os._exit terminates immediately without raising SystemExit through ctypes callbacks
         os._exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -144,8 +235,13 @@ def main() -> None:
             on_randomize=tray.randomize_now,
             on_emergency_disable=tray.emergency_disable,
             on_toggle_middle=tray.toggle_button_mode,
+            on_toggle_cursor_lock=tray.toggle_cursor_lock,
+            on_toggle_teleport=tray.toggle_teleport,
+            on_toggle_scroll=tray.toggle_scroll_chaos,
+            on_shuffle_hotkeys=tray.shuffle_hotkeys,
             on_exit=shutdown,
         )
+        tray.hotkey_manager = hotkey_manager
         hotkey_manager.start()
 
     # 6. Launch System Tray UI (blocks main thread until exit)
@@ -159,4 +255,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

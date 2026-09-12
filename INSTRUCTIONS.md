@@ -136,6 +136,10 @@ python main.py
 | Flag | Description | Default |
 |---|---|---|
 | `--autostart` | Starts ClickChaos with Chaos Mode immediately **ACTIVE**. | `False` |
+| `--lock-cursor` | Starts with mouse cursor immediately **LOCKED/FROZEN**. | `False` |
+| `--teleport` | Starts with mouse cursor teleportation (jump on click) **ACTIVE**. | `False` |
+| `--no-scroll-chaos` | Disables chaotic scroll wheel inversion. | `False` |
+| `--no-xbuttons` | Excludes mouse side hotkeys (XButton1 and XButton2) from swapping. | `False` |
 | `--interval <sec>` | Specifies the automatic reshuffle interval in seconds. | `5.0` |
 | `--debug` | Enables verbose diagnostic logging in the terminal. | `False` |
 | `--no-hotkeys` | Disables global keyboard shortcuts. | `False` |
@@ -144,6 +148,9 @@ python main.py
 ```powershell
 # Start with Chaos Mode immediately on, reshuffling every 5 seconds (default):
 uv run python -m src.main --autostart
+
+# Start with Chaos Mode, Cursor Lock, and Mouse Teleportation active:
+uv run python -m src.main --autostart --lock-cursor --teleport
 
 # Start with a custom 15-second reshuffle interval:
 uv run python -m src.main --autostart --interval 15
@@ -161,12 +168,16 @@ ClickChaos registers native Windows hotkeys (`RegisterHotKey`) that work system-
 | Shortcut | Alternative | Action | Description |
 |---|---|---|---|
 | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> | **Toggle Chaos Mode** | Toggles Chaos Mode ON (swapping clicks) or OFF (normal mouse). |
-| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>R</kbd> | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> | **Randomize Now** | Reshuffles mouse button permutations immediately. |
-| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>X</kbd> | — | **Emergency Panic Disable** | Instantly turns OFF Chaos Mode and releases any held virtual buttons. |
-| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>M</kbd> | — | **Toggle Button Mode** | Swaps between 3-Button mode (L/R/M) and 2-Button mode (L/R only). |
-| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Q</kbd> | — | **Exit ClickChaos** | Cleanly shuts down the hook, timer, and tray icon. |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>R</kbd> | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> | **Randomize Buttons** | Reshuffles mouse button permutations immediately. |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>L</kbd> | — | **Lock Cursor (Freeze)** | Instantly freezes the mouse cursor in place or restores movement. |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd> | — | **Toggle Teleportation** | Toggles mouse cursor teleportation/jumping on clicks. |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>W</kbd> | — | **Toggle Scroll Chaos** | Inverts and scrambles mouse wheel scrolling. |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>K</kbd> | — | **Shuffle Hotkeys** | Randomly changes which keyboard letters control the actions. |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>X</kbd> | — | **Emergency Panic Disable** | Instantly turns OFF Chaos Mode, unlocks cursor, stops teleport, and restores defaults. |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>M</kbd> | — | **Cycle Button Mode** | Cycles between 5-Button (L/R/M/X1/X2), 3-Button, and 2-Button modes. |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Q</kbd> | — | **Exit ClickChaos** | Cleanly shuts down the hook, unlocks cursor, and exits. |
 
-> **Safety Guarantee**: Native `RegisterHotKey` does not install an intrusive low-level keyboard hook (`WH_KEYBOARD_LL`), ensuring zero keylogger flags from antivirus software and zero typing lag.
+> **Safety Guarantee**: Native `RegisterHotKey` does not install an intrusive low-level keyboard hook (`WH_KEYBOARD_LL`), ensuring zero keylogger flags from antivirus software and zero typing lag. `Ctrl+Alt+X` is immutable and always functions as an emergency release.
 
 ---
 
@@ -178,18 +189,25 @@ When ClickChaos runs, an icon appears in the Windows notification area (system t
 
 ### Dynamic Icon States
 - **Vibrant Glowing Green/Cyan Icon**: Chaos Mode is **ACTIVE** (clicks are being swapped).
+- **Orange Rim Glow**: Cursor is **LOCKED / FROZEN**.
 - **Subtle Slate Gray Icon**: Chaos Mode is **INACTIVE** (mouse operates normally).
 
 ### Tray Context Menu (Right-Click)
 
 Right-click the ClickChaos tray icon to access:
-1. **Status Readout**: Displays current mode and mapping (e.g. `Status: 🟢 ACTIVE [L ➔ R | R ➔ M | M ➔ L]`).
+1. **Status Readout**: Displays current mode, cursor lock state, teleport badge, and mapping.
 2. **Chaos Mode (Toggle)**: Turn the swapping effect ON or OFF (or double-click the tray icon).
-3. **Randomize Now**: Immediately shuffles the button mapping to a new permutation.
-4. **Auto-Shuffle Settings**:
+3. **Lock Cursor (Freeze)**: Freezes the mouse cursor in place using Win32 `ClipCursor`.
+4. **Mouse Teleportation (Jump)**: Teleports cursor to a random screen spot whenever a click occurs.
+5. **Scroll Wheel Inversion**: Inverts and randomizes mouse wheel scrolling direction.
+6. **Randomize Buttons Now**: Immediately shuffles button mapping to a new permutation.
+7. **Emergency Disable**: Instantly turns off Chaos Mode, unlocks cursor, disables teleport, and releases buttons.
+8. **Button Mode & Hotkeys**: Select between 5-Button (L, R, M, X1, X2 Side Hotkeys), 3-Button, and 2-Button modes.
+9. **Keyboard Hotkeys Settings**: Shuffle shortcuts on demand, view current active key assignments, or reset back to default shortcuts.
+10. **Auto-Shuffle Settings**:
    - Enable/Disable timer-based reshuffling.
    - Set interval presets: **5s**, **10s**, **30s**, **60s**, or **120s**.
-5. **Exit ClickChaos**: Cleanly unhooks the Windows hook, releases any pressed buttons, and terminates the application safely.
+11. **Exit ClickChaos**: Cleanly unhooks the Windows hook, releases any pressed buttons, unlocks cursor, and terminates safely.
 
 ---
 
@@ -227,3 +245,65 @@ No. `MouseHookManager` tracks physical button down states and matches every `DOW
 
 ### 4. How do I stop ClickChaos?
 Right-click the system tray icon and select **Exit ClickChaos**, or press `Ctrl + C` in the terminal where it was launched.
+
+---
+
+## Linux Support (Direct Kernel evdev Backend)
+
+ClickChaos includes full Linux support, designed specifically to bypass modern X11 and Wayland display server restrictions by communicating directly with the Linux kernel input subsystem via `python-evdev`.
+
+### Technical Architecture on Linux
+- **Device Discovery**: Scans `/dev/input/` for physical pointer devices with `EV_REL` (`REL_X`, `REL_Y`) and `EV_KEY` (`BTN_LEFT`). **Strictly ignores keyboards** by excluding alphanumeric keys (`KEY_A`, `KEY_ENTER`, etc.).
+- **Exclusive Device Grabbing (`EVIOCGRAB`)**: Calls `device.grab()` to lock the physical mouse at the kernel level so the OS and display server do not receive raw hardware events.
+- **Virtual Injection (`evdev.UInput`)**: Instantiates a virtual mouse device (`ClickChaos-Virtual-Mouse`) capable of `EV_KEY` clicks, `EV_REL` movement, and `REL_WHEEL` scrolling.
+- **Event Translation (The Chaos)**:
+  - **Button Derangement**: Bijectively maps Left, Right, Middle (and side buttons if present) so no button maps to itself.
+  - **Scroll Wheel Inversion**: Inverts `REL_WHEEL` deltas (+1 becomes -1).
+  - **Cursor Drift (Slippery Cursor)**: Intercepts `REL_X` and `REL_Y` to inject small random offsets ($\pm 1$ or $\pm 2$ px) making the cursor feel slippery.
+  - **Zero Keyboard Impact**: Affects only mouse/cursor events; keyboard devices are completely untouched.
+- **CPU Efficiency**: Uses `select.select()` with epoll kernel wait queues (0% CPU usage when idle).
+
+### Linux Permissions Setup
+
+Grabbing raw input devices from `/dev/input/` and writing to `/dev/uinput` requires elevated permissions:
+
+#### Option A: Run with `sudo` (Fastest)
+```bash
+sudo python3 clickchaos_linux.py
+# or
+sudo python3 main.py
+```
+
+#### Option B: Configure `udev` rules (Run without `sudo`)
+1. Add your user to the `input` group:
+   ```bash
+   sudo usermod -a -G input $USER
+   ```
+2. Grant read/write access to `/dev/uinput`:
+   ```bash
+   echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | sudo tee /etc/udev/rules.d/99-uinput.rules
+   sudo udevadm control --reload-rules && sudo udevadm trigger
+   sudo modprobe uinput
+   ```
+3. Log out and log back in for group membership to take effect.
+
+### Linux Safety Failsafes
+
+Because ClickChaos exclusively grabs the physical mouse, multiple safety mechanisms guarantee you will never be locked out:
+1. **Dual-Button Hold Panic**: Press and hold **[Left Click + Right Click] simultaneously for 5.0 seconds**. ClickChaos will instantly ungrab the physical mouse, close virtual devices, and exit cleanly.
+2. **Auto-Exit Timer**: Specify `--auto-exit <seconds>` (e.g. `--auto-exit 30`) to automatically terminate after N seconds.
+3. **Graceful Signal Handling**: `SIGINT` (`Ctrl+C`) and `SIGTERM` always trigger the `finally` block to ungrab hardware devices and restore normal mouse operation.
+
+### Linux CLI Options
+```bash
+python3 clickchaos_linux.py [OPTIONS]
+
+Options:
+  --device /dev/input/eventX  Explicit path to mouse event device (default: auto-detected)
+  --interval 5.0              Seconds between button reshuffles (default: 5.0s)
+  --no-scroll-chaos           Disable scroll wheel inversion
+  --drift                     Enable slippery cursor drift chaos
+  --auto-exit 30              Automatically exit after 30 seconds
+  --no-xbuttons               Disable side buttons (Mouse 4 and 5)
+```
+
