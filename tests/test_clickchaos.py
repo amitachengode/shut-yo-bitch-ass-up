@@ -398,19 +398,25 @@ class TestMouseHookManagerStructures:
         hook_data.dwExtraInfo = 0
         p_hook_data = ctypes.cast(ctypes.pointer(hook_data), ctypes.c_void_p).value
 
-        # First 4 clicks: mapped to target_button (RIGHT)
-        for _ in range(4):
+        # First 3 clicks: not chaotic
+        for _ in range(3):
             mgr._low_level_mouse_proc(0, WM_LBUTTONDOWN, p_hook_data)
             mgr._low_level_mouse_proc(0, WM_LBUTTONUP, p_hook_data)
+        assert mgr._click_count == 3
+        assert not mgr.is_chaotic_movement
 
+        # 4th click: triggers chaotic movement
+        mgr._low_level_mouse_proc(0, WM_LBUTTONDOWN, p_hook_data)
+        mgr._low_level_mouse_proc(0, WM_LBUTTONUP, p_hook_data)
         assert mgr._click_count == 4
         assert not mgr.is_cursor_locked
+        assert mgr.is_chaotic_movement
 
         # Clear queue from first 4 clicks
         while not mgr._injection_queue.empty():
             mgr._injection_queue.get_nowait()
 
-        # 5th click: cursor locks, physical click is deferred as pending
+        # 5th click: cursor locks, chaotic movement rests/resets, physical click deferred
         stuck_called = False
         def on_stuck():
             nonlocal stuck_called
@@ -420,6 +426,7 @@ class TestMouseHookManagerStructures:
         res = mgr._low_level_mouse_proc(0, WM_LBUTTONDOWN, p_hook_data)
         assert res == 1
         assert mgr.is_cursor_locked
+        assert not mgr.is_chaotic_movement
         assert mgr._click_count == 5
         assert mgr._pending_unlock_click == ButtonType.LEFT
 
@@ -429,6 +436,7 @@ class TestMouseHookManagerStructures:
         # When unlock_cursor is called (after user enters correct letter)
         mgr.unlock_cursor()
         assert not mgr.is_cursor_locked
+        assert not mgr.is_chaotic_movement
         assert mgr._pending_unlock_click is None
 
         # Verify the deferred natural button (LEFT, True) and (LEFT, False) are queued
@@ -438,6 +446,40 @@ class TestMouseHookManagerStructures:
 
         assert (ButtonType.LEFT, True) in queued_items
         assert (ButtonType.LEFT, False) in queued_items
+
+    def test_chaotic_movement_interception(self):
+        """When chaotic movement is active, mouse move events are intercepted and randomized."""
+        randomizer = ButtonRandomizer()
+        mgr = MouseHookManager(randomizer=randomizer)
+        mgr.set_active(True)
+
+        hook_data = MSLLHOOKSTRUCT()
+        hook_data.flags = 0
+        hook_data.dwExtraInfo = 0
+        hook_data.pt.x = 500
+        hook_data.pt.y = 500
+        p_hook_data = ctypes.cast(ctypes.pointer(hook_data), ctypes.c_void_p).value
+
+        # When chaotic movement is NOT active, WM_MOUSEMOVE passes through
+        assert not mgr.is_chaotic_movement
+        res = mgr._low_level_mouse_proc(0, WM_MOUSEMOVE, p_hook_data)
+        assert res != 1
+
+        # Simulate 4th click
+        mgr._click_count = 3
+        mgr._low_level_mouse_proc(0, WM_LBUTTONDOWN, p_hook_data)
+        mgr._low_level_mouse_proc(0, WM_LBUTTONUP, p_hook_data)
+        assert mgr.is_chaotic_movement
+
+        # When chaotic movement IS active, WM_MOUSEMOVE is intercepted (returns 1)
+        res_move = mgr._low_level_mouse_proc(0, WM_MOUSEMOVE, p_hook_data)
+        assert res_move == 1
+        assert mgr._last_move_pos is not None
+
+        # Reset movement chaos explicitly
+        mgr.reset_movement_chaos()
+        assert not mgr.is_chaotic_movement
+        assert mgr._last_move_pos is None
 
 
 class TestTrayUIAssets:

@@ -243,6 +243,8 @@ class MouseHookManager:
 
         self._click_count = 0
         self._locked_pos: Optional[tuple[int, int]] = None
+        self._is_chaotic_movement = False
+        self._last_move_pos: Optional[tuple[int, int]] = None
         self._pending_unlock_click: Optional[ButtonType] = None
         self._on_stuck_callback: Optional[Callable[[], None]] = None
 
@@ -259,6 +261,18 @@ class MouseHookManager:
     def is_cursor_locked(self) -> bool:
         with self._lock:
             return self._is_cursor_locked
+
+    @property
+    def is_chaotic_movement(self) -> bool:
+        with self._lock:
+            return self._is_chaotic_movement
+
+    def reset_movement_chaos(self) -> None:
+        """Reset chaotic movement back to normal."""
+        with self._lock:
+            self._is_chaotic_movement = False
+            self._last_move_pos = None
+        logger.info("Chaotic movement rested/reset.")
 
     @property
     def is_teleport_enabled(self) -> bool:
@@ -342,6 +356,8 @@ class MouseHookManager:
             self._is_cursor_locked = False
             pending = self._pending_unlock_click
             self._pending_unlock_click = None
+            self._is_chaotic_movement = False
+            self._last_move_pos = None
             logger.info("Cursor unlocked.")
 
         if pending and locked_coord:
@@ -374,6 +390,8 @@ class MouseHookManager:
 
             if not active:
                 self._release_all_active_synthetic_buttons()
+                self._is_chaotic_movement = False
+                self._last_move_pos = None
                 if self._is_cursor_locked:
                     self.unlock_cursor()
 
@@ -523,13 +541,59 @@ class MouseHookManager:
                     user32.SetCursorPos(lx, ly)
                 return 1
 
-            # Fast path: Mouse movement passes through when not locked
-            if is_move:
-                return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
-
             # If Chaos Mode is not active, let clicks and scrolls pass through
             if not self._is_active:
                 return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
+
+            # Handle Mouse Movement Chaos
+            if is_move:
+                with self._lock:
+                    chaotic = self._is_chaotic_movement
+
+                if not chaotic:
+                    return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
+
+                # Chaotic drunk / jittery movement active after 4th click
+                pt = hook_struct.pt
+                curr_x, curr_y = pt.x, pt.y
+
+                with self._lock:
+                    last_pos = self._last_move_pos
+                    self._last_move_pos = (curr_x, curr_y)
+
+                if last_pos is not None:
+                    dx = curr_x - last_pos[0]
+                    dy = curr_y - last_pos[1]
+                else:
+                    dx, dy = 0, 0
+
+                # Introduce chaotic jitter and drunken zigzag multiplier
+                # Random jitter offset between -25 and +25 pixels plus inverted/amplified delta
+                jitter_x = random.randint(-25, 25) + int(dx * random.uniform(-1.5, 1.5))
+                jitter_y = random.randint(-25, 25) + int(dy * random.uniform(-1.5, 1.5))
+
+                new_x = curr_x + jitter_x
+                new_y = curr_y + jitter_y
+
+                # Clamp to screen bounds
+                vx = user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+                vy = user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+                vw = user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
+                vh = user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
+                if vw <= 0 or vh <= 0:
+                    vx, vy, vw, vh = 0, 0, user32.GetSystemMetrics(SM_CXSCREEN), user32.GetSystemMetrics(SM_CYSCREEN)
+                if vw <= 0:
+                    vw = 1920
+                if vh <= 0:
+                    vh = 1080
+
+                new_x = max(vx, min(vx + vw - 1, new_x))
+                new_y = max(vy, min(vy + vh - 1, new_y))
+
+                user32.SetCursorPos(new_x, new_y)
+                with self._lock:
+                    self._last_move_pos = (new_x, new_y)
+                return 1
 
             # Handle Scroll Wheel Events
             if is_scroll:
@@ -554,13 +618,23 @@ class MouseHookManager:
             with self._lock:
                 if is_down:
                     self._click_count += 1
+                    # 5th Click: Movement rests / resets, cursor locks, mystery unlock prompt triggers
                     if self._click_count % 5 == 0:
+                        self._is_chaotic_movement = False
+                        self._last_move_pos = None
                         self.lock_cursor()
                         self._pending_unlock_click = phys_button
                         if self._on_stuck_callback:
                             # Call asynchronously to not block the low level hook thread
                             threading.Thread(target=self._on_stuck_callback, daemon=True).start()
                         return 1
+
+                    # 4th Click: Trigger crazy jittery / drunken zigzag mouse movement
+                    if self._click_count % 5 == 4:
+                        self._is_chaotic_movement = True
+                        pt = hook_struct.pt
+                        self._last_move_pos = (pt.x, pt.y)
+                        logger.info("🤪 4th click detected: Chaotic jitter mouse movement ACTIVATED!")
 
                     target_button = self.randomizer.map_button(phys_button)
                     self._active_presses[phys_button] = target_button
