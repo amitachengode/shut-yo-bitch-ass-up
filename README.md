@@ -6,30 +6,28 @@
 
 
 ## Basic Details
-### Team Name: [Name]
+### Team Name: Kaali Chaaya
 
 
 ### Team Members
-- Team Lead: [Name] - [College]
-- Member 2: [Name] - [College]
-- Member 3: [Name] - [College]
+- Team Lead: [Amit A Chengode] - [College of Engineering Trivandrum]
+- Member 1: [Sangeeth S Krishna] - [College of Engineering Trivandrum]
 
 ### Project Description
-[2-3 lines about what your project does]
+Basically toggles mouse buttons, locks cursor and shit like that using hotkeys.
 
 ### The Problem (that doesn't exist)
-[What ridiculous problem are you solving?]
+Some people just can't keep their hands to themselves. 
+So we made a project to mess with them.
 
 ### The Solution (that nobody asked for)
-[How are you solving it? Keep it fun!]
+Most of the people use mouse to select or click. SO, we decided to randomize the mouse hotkeys and lock the cursor.
 
 ## Technical Details
 ### Technologies/Components Used
 For Software:
-- [Languages used]
-- [Frameworks used]
-- [Libraries used]
-- [Tools used]
+- [Python 3.10]
+- [pillow, pystray, pytest]
 
 For Hardware:
 - [List main components]
@@ -39,10 +37,14 @@ For Hardware:
 ### Implementation
 For Software:
 # Installation
-[commands]
+```bash
+$ uv sync
+```
 
 # Run
-[commands]
+```bash
+$ uv run python main.py
+```
 
 ### Project Documentation
 For Software:
@@ -89,9 +91,8 @@ For Hardware:
 [Add any extra demo materials/links]
 
 ## Team Contributions
-- [Name 1]: [Specific contributions]
-- [Name 2]: [Specific contributions]
-- [Name 3]: [Specific contributions]
+- [Name 1]: Amit A Chengode
+- [Name 2]: Sangeeth S Krishna
 
 ---
 Made with ❤️ at TinkerHub Useless Projects 
