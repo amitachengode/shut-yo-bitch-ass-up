@@ -285,9 +285,9 @@ def main() -> None:
 
         def on_stuck():
             letter = random.choice(string.ascii_uppercase)
-            print(f"\n==============================================", flush=True)
-            print(f"   CURSOR STUCK! Press '{letter}' to unlock!  ", flush=True)
-            print(f"==============================================\n", flush=True)
+            print(f"\n=======================================================", flush=True)
+            print(f"   CURSOR STUCK! Find the secret key on your keyboard! ", flush=True)
+            print(f"=======================================================\n", flush=True)
             show_stuck_popup(letter)
 
             def unlock_and_dismiss():

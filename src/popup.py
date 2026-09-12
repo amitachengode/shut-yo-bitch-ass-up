@@ -31,7 +31,7 @@ root.attributes("-alpha", 0.96)
 root.overrideredirect(True)
 root.configure(bg="#0F141C")
 
-w, h = 420, 210
+w, h = 440, 220
 screen_w = root.winfo_screenwidth()
 screen_h = root.winfo_screenheight()
 x = (screen_w - w) // 2
@@ -39,7 +39,7 @@ y = max(80, (screen_h - h) // 3)
 root.geometry(f"{w}x{h}+{x}+{y}")
 
 # Outer glowing border
-outer_border = tk.Frame(root, bg="#00F0B4", bd=2)
+outer_border = tk.Frame(root, bg="#FF3C64", bd=2)
 outer_border.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
 container = tk.Frame(outer_border, bg="#141A26")
@@ -58,20 +58,21 @@ title_lbl.pack(pady=(16, 4))
 # Instructions
 sub_lbl = tk.Label(
     container,
-    text="Press this key on your keyboard to unlock:",
-    font=("Segoe UI", 10),
-    fg="#A0AAB8",
+    text="There is a secret key on your keyboard.\nYou have to figure it out to unlock!",
+    font=("Segoe UI", 11),
+    fg="#E0E6ED",
     bg="#141A26",
+    justify=tk.CENTER,
 )
-sub_lbl.pack(pady=(0, 10))
+sub_lbl.pack(pady=(4, 10))
 
-# Unlock key badge
+# Mystery key badge
 key_badge = tk.Label(
     container,
-    text=f"  [ {letter.upper()} ]  ",
-    font=("Consolas", 26, "bold"),
+    text="  [ ? ]  ",
+    font=("Consolas", 24, "bold"),
     fg="#0F141C",
-    bg="#00F0B4",
+    bg="#FFB800",
     padx=16,
     pady=4,
     relief=tk.RAISED,
@@ -80,9 +81,9 @@ key_badge.pack(pady=(0, 10))
 
 tip_lbl = tk.Label(
     container,
-    text="ClickChaos Random Challenge",
-    font=("Segoe UI", 8, "italic"),
-    fg="#606876",
+    text="Start pressing keys to escape...",
+    font=("Segoe UI", 9, "italic"),
+    fg="#717D8A",
     bg="#141A26",
 )
 tip_lbl.pack(pady=(0, 8))
